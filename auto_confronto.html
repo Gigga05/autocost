@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoCost — Confronto Spesa</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0f1117;
+    --surface:   #181c25;
+    --surface2:  #1f2433;
+    --border:    #2a3045;
+    --fuel:      #f5a623;
+    --fuel-dim:  #7a5010;
+    --ev:        #00d4ff;
+    --ev-dim:    #005f75;
+    --text:      #e8ecf4;
+    --subtext:   #6b7590;
+    --green:     #2ecc71;
+    --red:       #e74c3c;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0 0 60px;
+    overflow-x: hidden;
+  }
+
+  /* scanline overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.07) 2px,
+      rgba(0,0,0,0.07) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--surface);
+    border-bottom: 2px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0;
+    width: 100%; height: 2px;
+    background: linear-gradient(90deg, var(--fuel), var(--ev));
+  }
+  .logo {
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  .logo span.fuel-c { color: var(--fuel); }
+  .logo span.ev-c   { color: var(--ev); }
+  .tagline {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--subtext);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* ── MAIN GRID ── */
+  .main {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 20px 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 640px) {
+    .main { grid-template-columns: 1fr; }
+  }
+
+  /* ── CARD ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeUp 0.5s ease both;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px; height: 100%;
+  }
+  .card.fuel::before { background: var(--fuel); }
+  .card.ev::before   { background: var(--ev); }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .card:nth-child(2) { animation-delay: 0.1s; }
+
+  .card-title {
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .card-title .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+  .card.fuel .card-title .dot { background: var(--fuel); box-shadow: 0 0 8px var(--fuel); }
+  .card.ev   .card-title .dot { background: var(--ev);   box-shadow: 0 0 8px var(--ev); }
+  .card.fuel .card-title { color: var(--fuel); }
+  .card.ev   .card-title { color: var(--ev); }
+
+  /* ── FIELD ── */
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block;
+    font-size: 0.68rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--subtext);
+    margin-bottom: 6px;
+  }
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0 12px;
+    transition: border-color 0.2s;
+  }
+  .field-row:focus-within {
+    border-color: var(--subtext);
+  }
+  .card.fuel .field-row:focus-within { border-color: var(--fuel); }
+  .card.ev   .field-row:focus-within { border-color: var(--ev); }
+
+  .field-row input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    color: var(--text);
+    padding: 11px 0;
+    width: 100%;
+  }
+  .field-row input::-webkit-inner-spin-button,
+  .field-row input::-webkit-outer-spin-button { opacity: 0.4; }
+
+  .unit {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--subtext);
+    white-space: nowrap;
+  }
+
+  /* ── PERCORRENZA (full width) ── */
+  .full { grid-column: 1 / -1; animation-delay: 0.2s; }
+  .full .card-title { color: var(--text); }
+  .full .card-title .dot { background: var(--text); }
+  .full .field-row:focus-within { border-color: var(--text); }
+
+  /* ── CALCOLA ── */
+  .calc-wrap {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    animation: fadeUp 0.5s 0.3s ease both;
+  }
+  .calc-btn {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 14px 48px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: color 0.3s, border-color 0.3s;
+  }
+  .calc-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, var(--fuel), var(--ev));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .calc-btn:hover { border-color: transparent; }
+  .calc-btn:hover::before { opacity: 1; }
+  .calc-btn span { position: relative; z-index: 1; }
+  .calc-btn:active { transform: scale(0.98); }
+
+  /* ── RESULTS ── */
+  .results {
+    grid-column: 1 / -1;
+    display: none;
+    flex-direction: column;
+    gap: 20px;
+    animation: fadeUp 0.5s ease both;
+  }
+  .results.visible { display: flex; }
+
+  /* barre confronto */
+  .bars-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 28px 24px;
+  }
+  .bars-title {
+    font-size: 0.68rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--subtext);
+    margin-bottom: 24px;
+  }
+
+  .bar-row {
+    margin-bottom: 20px;
+  }
+  .bar-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .bar-label .name {
+    font-size: 0.75rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .bar-label .value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.1rem;
+  }
+  .bar-label.fuel .name  { color: var(--fuel); }
+  .bar-label.fuel .value { color: var(--fuel); }
+  .bar-label.ev   .name  { color: var(--ev); }
+  .bar-label.ev   .value { color: var(--ev); }
+
+  .bar-track {
+    height: 10px;
+    background: var(--surface2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    width: 0;
+    transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .bar-fill.fuel { background: linear-gradient(90deg, var(--fuel-dim), var(--fuel)); }
+  .bar-fill.ev   { background: linear-gradient(90deg, var(--ev-dim), var(--ev)); }
+
+  /* ── VERDETTO ── */
+  .verdict {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 28px 24px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .verdict::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0;
+    width: 100%; height: 3px;
+  }
+  .verdict.winner-ev::after   { background: var(--ev); box-shadow: 0 0 12px var(--ev); }
+  .verdict.winner-fuel::after { background: var(--fuel); box-shadow: 0 0 12px var(--fuel); }
+  .verdict.pari::after        { background: linear-gradient(90deg, var(--fuel), var(--ev)); }
+
+  .verdict-label {
+    font-size: 0.68rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--subtext);
+    margin-bottom: 10px;
+  }
+  .verdict-winner {
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .verdict.winner-ev   .verdict-winner { color: var(--ev); }
+  .verdict.winner-fuel .verdict-winner { color: var(--fuel); }
+  .verdict.pari        .verdict-winner { color: var(--text); }
+
+  .verdict-saving {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 2.2rem;
+    font-weight: 400;
+    letter-spacing: 1px;
+  }
+  .verdict.winner-ev   .verdict-saving { color: var(--ev); }
+  .verdict.winner-fuel .verdict-saving { color: var(--fuel); }
+
+  .verdict-sub {
+    font-size: 0.8rem;
+    color: var(--subtext);
+    margin-top: 6px;
+    letter-spacing: 1px;
+  }
+
+  /* ── DETTAGLI ── */
+  .details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 640px) { .details-grid { grid-template-columns: 1fr; } }
+
+  .detail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px;
+  }
+  .detail-card.fuel { border-top: 2px solid var(--fuel); }
+  .detail-card.ev   { border-top: 2px solid var(--ev); }
+
+  .detail-title {
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .detail-card.fuel .detail-title { color: var(--fuel); }
+  .detail-card.ev   .detail-title { color: var(--ev); }
+
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row .dk { color: var(--subtext); font-size: 0.75rem; letter-spacing: 1px; }
+  .detail-row .dv {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--text);
+  }
+
+  /* ── COSTO/KM (mini stat) ── */
+  .cost-per-km {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border-radius: 3px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .cost-per-km .cpk-label {
+    font-size: 0.65rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--subtext);
+  }
+  .cost-per-km .cpk-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+  }
+  .detail-card.fuel .cpk-val { color: var(--fuel); }
+  .detail-card.ev   .cpk-val { color: var(--ev); }
+
+  /* corner decoration */
+  .corner {
+    position: absolute;
+    top: 0; right: 0;
+    width: 40px; height: 40px;
+    overflow: hidden;
+    opacity: 0.3;
+  }
+  .corner::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 0; height: 0;
+    border-style: solid;
+    border-width: 0 40px 40px 0;
+  }
+  .card.fuel .corner::before { border-color: transparent var(--fuel) transparent transparent; }
+  .card.ev   .corner::before { border-color: transparent var(--ev) transparent transparent; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">
+      <span class="fuel-c">⛽</span> Auto<span class="fuel-c">Cost</span> <span class="ev-c">⚡</span>
+    </div>
+    <div class="tagline">Confronto spesa — Termica vs Elettrica</div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- CARD TERMICA -->
+  <div class="card fuel" style="animation-delay:0s">
+    <div class="corner"></div>
+    <div class="card-title"><span class="dot"></span> Auto Termica</div>
+
+    <div class="field">
+      <label>Consumo medio</label>
+      <div class="field-row">
+        <input type="number" id="consumo_at" value="6.7" step="0.1" min="0">
+        <span class="unit">L / 100 km</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Costo carburante</label>
+      <div class="field-row">
+        <input type="number" id="costo_litro" value="1.70" step="0.01" min="0">
+        <span class="unit">€ / L</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD ELETTRICA -->
+  <div class="card ev" style="animation-delay:0.1s">
+    <div class="corner"></div>
+    <div class="card-title"><span class="dot"></span> Auto Elettrica</div>
+
+    <div class="field">
+      <label>Consumo medio</label>
+      <div class="field-row">
+        <input type="number" id="consumo_ae" value="22.3" step="0.1" min="0">
+        <span class="unit">kWh / 100 km</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Costo elettricità</label>
+      <div class="field-row">
+        <input type="number" id="costo_kwh" value="0.65" step="0.01" min="0">
+        <span class="unit">€ / kWh</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PERCORRENZA -->
+  <div class="card full" style="animation-delay:0.2s">
+    <div class="card-title"><span class="dot"></span> Percorrenza annua</div>
+    <div class="field">
+      <div class="field-row">
+        <input type="number" id="percorrenza" value="35000" step="500" min="0">
+        <span class="unit">km</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTONE -->
+  <div class="calc-wrap">
+    <button class="calc-btn" onclick="calcola()">
+      <span>▶ &nbsp; Calcola</span>
+    </button>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results" id="results">
+
+    <!-- barre -->
+    <div class="bars-card">
+      <div class="bars-title">◈ Confronto spesa totale</div>
+
+      <div class="bar-row">
+        <div class="bar-label fuel">
+          <span class="name">⛽ Termica</span>
+          <span class="value" id="val-fuel">—</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill fuel" id="bar-fuel"></div></div>
+      </div>
+
+      <div class="bar-row">
+        <div class="bar-label ev">
+          <span class="name">⚡ Elettrica</span>
+          <span class="value" id="val-ev">—</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill ev" id="bar-ev"></div></div>
+      </div>
+    </div>
+
+    <!-- verdetto -->
+    <div class="verdict" id="verdict">
+      <div class="verdict-label">◈ Risultato</div>
+      <div class="verdict-winner" id="verdict-winner">—</div>
+      <div class="verdict-saving" id="verdict-saving">—</div>
+      <div class="verdict-sub" id="verdict-sub"></div>
+    </div>
+
+    <!-- dettagli -->
+    <div class="details-grid">
+      <div class="detail-card fuel">
+        <div class="detail-title">⛽ Dettaglio Termica</div>
+        <div class="detail-row">
+          <span class="dk">Consumo</span>
+          <span class="dv" id="d-consumo-at">—</span>
+        </div>
+        <div class="detail-row">
+          <span class="dk">Costo carburante</span>
+          <span class="dv" id="d-costo-litro">—</span>
+        </div>
+        <div class="detail-row">
+          <span class="dk">Percorrenza</span>
+          <span class="dv" id="d-perc-fuel">—</span>
+        </div>
+        <div class="detail-row">
+          <span class="dk">Spesa totale</span>
+          <span class="dv" id="d-tot-fuel">—</span>
+        </div>
+        <div class="cost-per-km">
+          <span class="cpk-label">Costo / km</span>
+          <span class="cpk-val" id="d-cpk-fuel">—</span>
+        </div>
+      </div>
+
+      <div class="detail-card ev">
+        <div class="detail-title">⚡ Dettaglio Elettrica</div>
+        <div class="detail-row">
+          <span class="dk">Consumo</span>
+          <span class="dv" id="d-consumo-ae">—</span>
+        </div>
+        <div class="detail-row">
+          <span class="dk">Costo elettricità</span>
+          <span class="dv" id="d-costo-kwh">—</span>
+        </div>
+        <div class="detail-row">
+          <span class="dk">Percorrenza</span>
+          <span class="dv" id="d-perc-ev">—</span>
+        </div>
+        <div class="detail-row">
+          <span class="dk">Spesa totale</span>
+          <span class="dv" id="d-tot-ev">—</span>
+        </div>
+        <div class="cost-per-km">
+          <span class="cpk-label">Costo / km</span>
+          <span class="cpk-val" id="d-cpk-ev">—</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /results -->
+
+</div><!-- /main -->
+
+<script>
+function fmt(n) {
+  return n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+}
+function fmtCpk(n) {
+  return (n * 100).toFixed(4) + ' €/km';
+}
+
+function calcola() {
+  const consumo_at  = parseFloat(document.getElementById('consumo_at').value)  || 0;
+  const costo_litro = parseFloat(document.getElementById('costo_litro').value) || 0;
+  const consumo_ae  = parseFloat(document.getElementById('consumo_ae').value)  || 0;
+  const costo_kwh   = parseFloat(document.getElementById('costo_kwh').value)   || 0;
+  const percorrenza = parseFloat(document.getElementById('percorrenza').value) || 0;
+
+  const distanza_rif = 100;
+
+  const sb = (consumo_at * costo_litro) * percorrenza / distanza_rif;
+  const se = (consumo_ae * costo_kwh)   * percorrenza / distanza_rif;
+
+  // barre
+  const maxVal = Math.max(sb, se, 0.01);
+  document.getElementById('val-fuel').textContent = fmt(sb);
+  document.getElementById('val-ev').textContent   = fmt(se);
+
+  // animate bars after a frame
+  requestAnimationFrame(() => {
+    document.getElementById('bar-fuel').style.width = (sb / maxVal * 100) + '%';
+    document.getElementById('bar-ev').style.width   = (se / maxVal * 100) + '%';
+  });
+
+  // verdetto
+  const verdict = document.getElementById('verdict');
+  const winner  = document.getElementById('verdict-winner');
+  const saving  = document.getElementById('verdict-saving');
+  const sub     = document.getElementById('verdict-sub');
+
+  verdict.className = 'verdict';
+  if (se < sb) {
+    verdict.classList.add('winner-ev');
+    winner.textContent = '⚡ Elettrica vince';
+    saving.textContent = fmt(sb - se);
+    sub.textContent    = `risparmio rispetto alla termica su ${percorrenza.toLocaleString('it-IT')} km`;
+  } else if (sb < se) {
+    verdict.classList.add('winner-fuel');
+    winner.textContent = '⛽ Termica vince';
+    saving.textContent = fmt(se - sb);
+    sub.textContent    = `risparmio rispetto all'elettrica su ${percorrenza.toLocaleString('it-IT')} km`;
+  } else {
+    verdict.classList.add('pari');
+    winner.textContent = 'Pareggio';
+    saving.textContent = '0,00 €';
+    sub.textContent    = 'nessuna differenza di spesa';
+  }
+
+  // dettagli
+  document.getElementById('d-consumo-at').textContent  = consumo_at + ' L/100km';
+  document.getElementById('d-costo-litro').textContent = costo_litro.toFixed(2) + ' €/L';
+  document.getElementById('d-perc-fuel').textContent   = percorrenza.toLocaleString('it-IT') + ' km';
+  document.getElementById('d-tot-fuel').textContent    = fmt(sb);
+  document.getElementById('d-cpk-fuel').textContent    = fmtCpk(consumo_at * costo_litro / distanza_rif);
+
+  document.getElementById('d-consumo-ae').textContent  = consumo_ae + ' kWh/100km';
+  document.getElementById('d-costo-kwh').textContent   = costo_kwh.toFixed(2) + ' €/kWh';
+  document.getElementById('d-perc-ev').textContent     = percorrenza.toLocaleString('it-IT') + ' km';
+  document.getElementById('d-tot-ev').textContent      = fmt(se);
+  document.getElementById('d-cpk-ev').textContent      = fmtCpk(consumo_ae * costo_kwh / distanza_rif);
+
+  // mostra risultati
+  const res = document.getElementById('results');
+  res.classList.add('visible');
+  res.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// calcola subito con i valori default
+window.addEventListener('load', calcola);
+</script>
+</body>
+</html>
